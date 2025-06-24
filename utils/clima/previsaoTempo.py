@@ -1,7 +1,14 @@
 import requests
+import os
 import math
+from dotenv import load_dotenv
 
-API_KEY = "b36d6245a16e41f410be3ce7b48a1f23"
+load_dotenv()
+
+API_KEY = os.getenv('API_CLIMA')
+print(API_KEY)
+exit()
+
 cidade = "São Paulo"
 link = f"https://api.openweathermap.org/data/2.5/weather?q={cidade}&appid={API_KEY}&units=metric&lang=pt_br"
 
