@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.clima.previsaoTempo import informacoesTempo
 from utils.previsao import previsaoSensores
+import os
 
 from dash_bootstrap_templates import ThemeSwitchAIO
 import dash
@@ -391,5 +392,9 @@ def update_team_label(team, toggle):
     return html.H5(f"{team}")
 
 
+# if __name__ == '__main__':
+    # app.run(debug=True, port=8080)
+
 if __name__ == '__main__':
-    app.run(debug=True, port=8080)
+    port = int(os.environ.get('PORT', 8080))
+    app.run(debug=True, host='0.0.0.0', port=port)
