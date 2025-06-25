@@ -3,6 +3,6 @@ dash_bootstrap_components
 plotly
 pandas
 numpy
-sklearn
+scikit-learn
 requests
 dotenv
