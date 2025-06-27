@@ -1,11 +1,15 @@
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.model_selection import train_test_split
+from utils.filtroPlaca import placa_filter
 import numpy as np
 
-def previsaoSensores():
+def previsaoSensores(filtro):
     # Carregar o CSV
-    df = pd.read_csv('data\\dados_sensores.csv')
+    df_sem_filtro = pd.read_csv('data\\dados_sensores.csv')
+
+    mask = placa_filter(filtro, df_sem_filtro)
+    df = df_sem_filtro.loc[mask]
 
     # Garantir que os dados estejam limpos
     df = df.dropna()
@@ -39,7 +43,7 @@ def previsaoSensores():
     previsoes = modelo.predict(dados_futuros)
 
     # Verificar quais dias precisam de irrigação
-    limite_umidade = 20.0 
+    limite_umidade = 30.0 
     umidade_texto = ""
 
     molhar_planta = False

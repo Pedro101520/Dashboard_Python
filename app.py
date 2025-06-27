@@ -5,6 +5,7 @@ import plotly.graph_objects as go
 import pandas as pd
 from utils.clima.previsaoTempo import informacoesTempo
 from utils.previsao import previsaoSensores
+from utils.filtroPlaca import placa_filter
 import os
 
 from dash_bootstrap_templates import ThemeSwitchAIO
@@ -16,7 +17,6 @@ app = dash.Dash(__name__, external_stylesheets=FONT_AWESOME)
 app.scripts.config.serve_locally = True
 server = app.server
 
-# Estilo
 tab_card = {'height': '100%'}
 
 main_config = {
@@ -40,75 +40,43 @@ url_theme1 = dbc.themes.FLATLY
 url_theme2 = dbc.themes.DARKLY
 
 df = pd.read_csv('data\\dados_sensores.csv')
-df['Data_Coleta'] = pd.to_datetime(df['Data_Coleta'], format='%Y-%m-%d')
-df['Mes_num'] = df['Data_Coleta'].dt.month
+df['Data_Coleta'] = pd.to_datetime(df['Data_Coleta'])
+
+ultima_data = df['Data_Coleta'].max().normalize()
+ultimos_7_dias = [(ultima_data - pd.Timedelta(days=i)).date() for i in range(7)]
+
+options_placa = [{'label': i, 'value': i} for i in df['placa'].unique()]
+options_dias = [{'label': dia.strftime('%d/%m'), 'value': dia.isoformat()} for dia in sorted(ultimos_7_dias)]
+options_dias.insert(0, {'label': 'Últimos 7 Dias', 'value': 'todos'})
 
 
-options_placa = []
-for i in df['placa'].unique():
-    options_placa.append({'label': i, 'value': i})
-
-
-
-def convert_to_text(abrev):
-    mapa = {
-        'jan': 'Janeiro', 'fev': 'Fevereiro', 'mar': 'Março', 'abr': 'Abril',
-        'mai': 'Maio', 'jun': 'Junho', 'jul': 'Julho', 'ago': 'Agosto',
-        'set': 'Setembro', 'out': 'Outubro', 'nov': 'Novembro', 'dez': 'Dezembro'
-    }
-    return mapa.get(abrev.lower(), abrev)
-
-
-# Opções dos RadioItems
-def convert_to_text2(month):
-    mapa = {
-        'jan': 'Janeiro', 'fev': 'Fevereiro', 'mar': 'Março', 'abr': 'Abril',
-        'mai': 'Maio', 'jun': 'Junho', 'jul': 'Julho', 'ago': 'Agosto',
-        'set': 'Setembro', 'out': 'Outubro', 'nov': 'Novembro', 'dez': 'Dezembro'
-    }
-    if month == 0:
-        return "Todo o Período"
-    return mapa.get(month.lower(), str(month))
-
-
-ordem_meses = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
-
-options_month = [{'label': 'Todo o Período', 'value': 0}] + [
-    {'label': convert_to_text(mes), 'value': mes}
-    for mes in ordem_meses if mes in df['Mes'].unique()
-]
-
-# Filtros
-def month_filter(month):
-    if month == 0:
-        mask = df['Mes'].isin(df['Mes'].unique())
+def day_filter(dia_str):
+    df['Data_Coleta'] = pd.to_datetime(df['Data_Coleta'])  # Garante conversão correta
+    if dia_str == 'todos':
+        ultima_data = df['Data_Coleta'].max().normalize()
+        sete_dias_atras = ultima_data - pd.Timedelta(days=6)
+        mask = (df['Data_Coleta'] >= sete_dias_atras) & (df['Data_Coleta'] <= ultima_data)
     else:
-        mask = df['Mes'].isin([month])
+        dia = pd.to_datetime(dia_str).date()
+        mask = df['Data_Coleta'].dt.date == dia
     return mask
 
-def placa_filter(placa):
-    mask = df['placa'].isin([placa])
-    return mask
+
 
 app.layout = dbc.Container(children=[
-    # Linha 1
     dbc.Row([
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
                     dbc.Row([
-                        dbc.Col([
-                            html.Legend("AgroTech")
-                        ], sm=8),
+                        dbc.Col([html.Legend("AgroTech")], sm=8),
                         dbc.Col([
                             html.Img(src="assets\\images\\logo.png", style={'width': '100%', 'maxHeight': '100px'})
                         ], sm=4, align="center")
                     ]),
                     dbc.Row([
-                        dbc.Col([
-                            ThemeSwitchAIO(aio_id="theme", themes=[url_theme1, url_theme2]),
-                        ])
-                    ], style={'margin-top': '10px'}),
+                        dbc.Col([ThemeSwitchAIO(aio_id="theme", themes=[url_theme1, url_theme2])])
+                    ], style={'margin-top': '10px'})
                 ])
             ], style=tab_card)
         ], sm=4, lg=3),
@@ -116,17 +84,13 @@ app.layout = dbc.Container(children=[
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    dbc.Row(
-                        dbc.Col([
-                            html.H4('Previsão de Próxima Irrigação'),
-                            html.Div(id='previsaoIrrigacao', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
-                        ])
-                    ),
-                    dbc.Row(
-                        dbc.Col([
-                            html.Div(id='previsaoUmidade', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
-                        ])
-                    )
+                    dbc.Row(dbc.Col([
+                        html.H4('Previsão de Próxima Irrigação'),
+                        html.Div(id='previsaoIrrigacao', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
+                    ])),
+                    dbc.Row(dbc.Col([
+                        html.Div(id='previsaoUmidade', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
+                    ]))
                 ])
             ], style=tab_card)
         ], sm=12, lg=5),
@@ -134,24 +98,18 @@ app.layout = dbc.Container(children=[
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    dbc.Row(
-                        dbc.Col([
-                            html.H4('Clima Atual'),
-                            html.Div(id='temperatura', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
-                        ])
-                    ),
-                    dbc.Row(
-                        dbc.Col([
-                            html.Div(id='descricao', style={'text-align': 'center', 'margin-top': '5px'}, className='dbc')
-                        ])
-                    )
+                    dbc.Row(dbc.Col([
+                        html.H4('Clima Atual'),
+                        html.Div(id='temperatura', style={'text-align': 'center', 'margin-top': '20px'}, className='dbc')
+                    ])),
+                    dbc.Row(dbc.Col([
+                        html.Div(id='descricao', style={'text-align': 'center', 'margin-top': '5px'}, className='dbc')
+                    ]))
                 ])
             ], style=tab_card)
         ], sm=12, lg=4)
-
     ], className='g-2 my-auto', style={'margin-top': '7px'}),
 
-    # Linha 2
     dbc.Row([
         dbc.Col([
             dbc.Card([
@@ -165,26 +123,23 @@ app.layout = dbc.Container(children=[
         dbc.Col([
             dbc.Card([
                 dbc.CardBody([
-                    dbc.Row(
-                        dbc.Col([
-                            html.H5('Escolha o Mês'),
-                            dbc.RadioItems(
-                                id="radio-month",
-                                options=options_month,
-                                value=0,
-                                inline=True,
-                                labelCheckedClassName="text-success",
-                                inputCheckedClassName="border border-success bg-success",
-                            ),
-                            html.Div(id='month-select', style={'text-align': 'center', 'margin-top': '30px'}, className='dbc')
-                        ])
-                    )
+                    dbc.Row(dbc.Col([
+                        html.H5('Escolha o Dia'),
+                        dbc.RadioItems(
+                            id="radio-dia",
+                            options=options_dias,
+                            value='todos',
+                            inline=True,
+                            labelCheckedClassName="text-success",
+                            inputCheckedClassName="border border-success bg-success"
+                        ),
+                        html.Div(id='month-select', style={'text-align': 'center', 'margin-top': '30px'}, className='dbc')
+                    ]))
                 ])
             ], style=tab_card)
         ], sm=12, lg=4)
     ], className='g-2 my-auto', style={'margin-top': '7px'}),
 
-    # Linha 3
     dbc.Row([
         dbc.Col([
             dbc.Card([
@@ -211,27 +166,29 @@ app.layout = dbc.Container(children=[
                     dbc.RadioItems(
                         id="radio-team",
                         options=options_placa,
-                         value=df['placa'].unique()[0],
+                        value=df['placa'].unique()[0],
                         inline=True,
                         labelCheckedClassName="text-warning",
-                        inputCheckedClassName="border border-warning bg-warning",
+                        inputCheckedClassName="border border-warning bg-warning"
                     ),
                     html.Div(id='team-select', style={'text-align': 'center', 'margin-top': '30px'}, className='dbc')
                 ])
             ], style=tab_card)
-        ], sm=12, lg=3),
-    ], className='g-2 my-auto', style={'margin-top': '7px'}),
-
+        ], sm=12, lg=3)
+    ], className='g-2 my-auto', style={'margin-top': '7px'})
 ], fluid=True, style={'height': '100vh'})
+
 
 @app.callback(
     Output('previsaoIrrigacao', 'children'),
     Output('previsaoUmidade', 'children'),
+    Input('radio-team', 'value'),
     Input(ThemeSwitchAIO.ids.switch("theme"), "value")
 )
-def valorPrevisao(value):
-    qtde_dias, umidade = previsaoSensores()
+def valorPrevisao(filtro, value):
+    qtde_dias, umidade = previsaoSensores(filtro)
     return html.P(qtde_dias, style={'font-size': '24px'}), html.P(umidade, style={'font-size': '24px'})
+
 
 @app.callback(
     Output('temperatura', 'children'),
@@ -242,22 +199,20 @@ def valoresClima(value):
     temperatura, descricao = informacoesTempo()
     return html.P(temperatura, style={'font-size': '24px'}), html.P(descricao, style={'font-size': '24px'})
 
+
 @app.callback(
     Output('graph1', 'figure'),
-    Input('radio-month', 'value'),
+    Input('radio-dia', 'value'),
     Input('radio-team', 'value'),
     Input(ThemeSwitchAIO.ids.switch("theme"), "value")
 )
-def graph10(month, placa, toggle):
+def graph10(dia, placa, toggle):
     template = template_theme1 if toggle else template_theme2
 
-    df = pd.read_csv('data\\dados_sensores.csv')
-
-    mask = month_filter(month)
-    df = df.loc[mask]
-
-    mask = placa_filter(placa)
-    df_3 = df.loc[mask]
+    mask = day_filter(dia)
+    df_filtrado = df.loc[mask]
+    mask_placa = placa_filter(placa, df_filtrado)
+    df_3 = df_filtrado.loc[mask_placa]
 
     df_legenda = df_3.rename(columns={
         'Temperatura_Ambiente': 'Temperatura Ambiente',
@@ -290,38 +245,23 @@ def graph10(month, placa, toggle):
 
 
 @app.callback(
-    Output('month-select', 'children'),
-    Input('radio-month', 'value'),
-    Input(ThemeSwitchAIO.ids.switch("theme"), "value")
-)
-def update_month_label(month, toggle):
-    return html.H5(convert_to_text2(month))
-
-# Graph 3
-@app.callback(
     Output('graph2', 'figure'),
-    Input('radio-month', 'value'),
+    Input('radio-dia', 'value'),
     Input('radio-team', 'value'),
     Input(ThemeSwitchAIO.ids.switch("theme"), "value")
 )
-def graph_umidade(month, placa, toggle):
+def graph_umidade(dia, placa, toggle):
     template = template_theme1 if toggle else template_theme2
 
-    df = pd.read_csv('data\\dados_sensores.csv')
+    print(dia)
+    mask = day_filter(dia)
+    df_filtrado = df.loc[mask]
 
-    mask = month_filter(month)
-    df = df.loc[mask]
+    mask_placa = placa_filter(placa, df_filtrado)
+    df_filtrado = df_filtrado.loc[mask_placa]
 
-    mask = placa_filter(placa)
-    df = df.loc[mask]
+    df_agg = df_filtrado.groupby('Data_Coleta')['Umidade_Solo'].mean().reset_index()
 
-    # Carregar os dados (se necessário, adapte para usar o DataFrame correto)
-    df['Data_Coleta'] = pd.to_datetime(df['Data_Coleta'])  # Garantir que é datetime
-
-    # Agrupar por dia e calcular a média da umidade do solo (caso haja repetições por dia)
-    df_agg = df.groupby('Data_Coleta')['Umidade_Solo'].mean().reset_index()
-
-    # Criar o gráfico
     fig = go.Figure(go.Scatter(
         x=df_agg['Data_Coleta'],
         y=df_agg['Umidade_Solo'],
@@ -330,7 +270,6 @@ def graph_umidade(month, placa, toggle):
         name='Umidade do Solo'
     ))
 
-    # Anotações
     fig.add_annotation(
         text='Umidade do Solo por Dia',
         xref="paper", yref="paper",
@@ -350,6 +289,7 @@ def graph_umidade(month, placa, toggle):
 
     return fig
 
+
 @app.callback(
     Output('graph3', 'figure'),
     Input('radio-team', 'value'),
@@ -358,13 +298,13 @@ def graph_umidade(month, placa, toggle):
 def graph_distribuicao_umidade(placa, toggle):
     template = template_theme1 if toggle else template_theme2
 
-    mask = placa_filter(placa)
+    mask = placa_filter(placa, df)
     df_3 = df.loc[mask]
 
     fig = px.histogram(
-        df,
+        df_3,
         x='Umidade_Solo',
-        nbins=30,  # Mais faixas para o gráfico ficar mais "espalhado" horizontalmente
+        nbins=30,
         color_discrete_sequence=['#4CAF50']
     )
 
@@ -374,14 +314,28 @@ def graph_distribuicao_umidade(placa, toggle):
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         template=template,
-        height=200,  # Mantendo o seu limite
-        bargap=0.05,  # Quase sem espaço entre as barras
-        margin={"l": 30, "r": 10, "t": 10, "b": 30},  # Tirando espaço de título
+        height=200,
+        bargap=0.05,
+        margin={"l": 30, "r": 10, "t": 10, "b": 30}
     )
 
     fig.update_traces(marker_line_width=0.5, marker_line_color="black")
 
     return fig
+
+
+@app.callback(
+    Output('month-select', 'children'),
+    Input('radio-dia', 'value'),
+    Input(ThemeSwitchAIO.ids.switch("theme"), "value")
+)
+def update_dia_label(dia, toggle):
+    if dia == 'todos':
+        return html.H5("Últimos 7 Dias")
+    else:
+        data = pd.to_datetime(dia)
+        return html.H5(f"{data.strftime('%d/%m/%Y')}")
+
 
 @app.callback(
     Output('team-select', 'children'),
@@ -391,9 +345,6 @@ def graph_distribuicao_umidade(placa, toggle):
 def update_team_label(team, toggle):
     return html.H5(f"{team}")
 
-
-# if __name__ == '__main__':
-    # app.run(debug=True, port=8080)
 
 if __name__ == '__main__':
     app.run(debug=True, port=8080)
